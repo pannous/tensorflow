@@ -36,7 +36,7 @@ def histogram_summary(tag, values, collections=None, name=None):
   """Outputs a `Summary` protocol buffer with a histogram.
 
   The generated
-  [`Summary`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/core/framework/summary.proto)
+  [`Summary`](https://www.tensorflow.org/code/tensorflow/core/framework/summary.proto)
   has one summary value containing a histogram for `values`.
 
   This op reports an `OutOfRange` error if any value is not finite.
@@ -115,7 +115,7 @@ def merge_summary(inputs, collections=None, name=None):
   """Merges summaries.
 
   This op creates a
-  [`Summary`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/core/framework/summary.proto)
+  [`Summary`](https://www.tensorflow.org/code/tensorflow/core/framework/summary.proto)
   protocol buffer that contains the union of all the values in the input
   summaries.
 
@@ -165,8 +165,8 @@ def scalar_summary(tags, values, collections=None, name=None):
   summary has a summary value for each tag-value pair in `tags` and `values`.
 
   Args:
-    tags: A 1-D `string` `Tensor`.  Tags for the summaries.
-    values: A 1-D `float32` or `float64` Tensor.  Values for the summaries.
+    tags: A `string` `Tensor`.  Tags for the summaries.
+    values: A real numeric Tensor.  Values for the summaries.
     collections: Optional list of graph collections keys. The new summary op is
       added to these collections. Defaults to `[GraphKeys.SUMMARIES]`.
     name: A name for the operation (optional).

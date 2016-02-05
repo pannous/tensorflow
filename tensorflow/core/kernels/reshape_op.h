@@ -19,11 +19,11 @@ limitations under the License.
 #include <memory>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/public/status.h"
-#include "tensorflow/core/public/tensor.h"
-#include "tensorflow/core/public/tensor_shape.h"
 
 namespace tensorflow {
 
@@ -35,13 +35,10 @@ class ReshapeOp : public OpKernel {
     const Tensor& input = context->input(0);
     const Tensor& sizes = context->input(1);
     // Preliminary validation of sizes.
-    OP_REQUIRES(context, TensorShapeUtils::IsLegacyVector(sizes.shape()),
+    OP_REQUIRES(context, IsLegacyVector(sizes.shape()),
                 errors::InvalidArgument("sizes input must be 1-D, not shape ",
-                                        sizes.shape().ShortDebugString()));
+                                        sizes.shape().DebugString()));
     const int64 num_dims = sizes.NumElements();
-    OP_REQUIRES(
-        context, num_dims <= 8,
-        errors::InvalidArgument(num_dims, " > max 8 output dims supported"));
 
     // Compute the output shape.  Determine product of specified
     // dimensions, and find the index of the unspecified one.

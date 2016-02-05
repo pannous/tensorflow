@@ -147,7 +147,7 @@ def import_graph_def(graph_def, input_map=None, return_elements=None,
   """Imports the TensorFlow graph in `graph_def` into the Python `Graph`.
 
   This function provides a way to import a serialized TensorFlow
-  [`GraphDef`](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/core/framework/graph.proto)
+  [`GraphDef`](https://www.tensorflow.org/code/tensorflow/core/framework/graph.proto)
   protocol buffer, and extract individual objects in the `GraphDef` as
   [`Tensor`](#Tensor) and [`Operation`](#Operation) objects. See
   [`Graph.as_graph_def()`](#Graph.as_graph_def) for a way to create a
@@ -215,7 +215,7 @@ def import_graph_def(graph_def, input_map=None, return_elements=None,
 
   with ops.op_scope(input_map.values(), name, 'import'):
     g = ops.get_default_graph()
-    g.graph_def_version = graph_def.version
+    g.graph_def_versions.CopyFrom(graph_def.versions)
 
     with ops.name_scope('_inputs'):
       input_map = {k: ops.convert_to_tensor(v) for k, v in input_map.items()}
@@ -225,6 +225,15 @@ def import_graph_def(graph_def, input_map=None, return_elements=None,
 
     # 1. Add operations without their inputs.
     for node in graph_def.node:
+      # Set any default attr values that aren't present.
+      op_def = op_dict[node.op]
+      for attr_def in op_def.attr:
+        key = attr_def.name
+        if attr_def.HasField('default_value'):
+          value = node.attr[key]
+          if value is None or value.WhichOneof('value') is None:
+            node.attr[key].CopyFrom(attr_def.default_value)
+
       output_types = _OutputTypes(node, op_dict)
       with _MaybeDevice(node.device):
         name_to_op[node.name] = g.create_op(

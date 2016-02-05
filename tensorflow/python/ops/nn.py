@@ -55,7 +55,7 @@ strided according to the `strides` argument.  `strides = [1, 1, 1, 1]` applies
 the filter to a patch at every offset, `strides = [1, 2, 2, 1]` applies the
 filter to every other image patch in each dimension, etc.
 
-Ignoring channels for the moment, and assume that the the 4-D `input` has shape
+Ignoring channels for the moment, and assume that the 4-D `input` has shape
 `[batch, in_height, in_width, ...]` and the 4-D `filter` has shape
 `[filter_height, filter_width, ...]`, then the spatial semantics of the
 convolution ops are as follows: first, according to the padding scheme chosen
@@ -63,7 +63,7 @@ as `'SAME'` or `'VALID'`, the output size and the padding pixels are computed.
 For the `'SAME'` padding, the output height and width are computed as:
 
     out_height = ceil(float(in_height) / float(strides[1]))
-    out_width  = ceil(float(in_width) / float(stides[2]))
+    out_width  = ceil(float(in_width) / float(strides[2]))
 
 and the padding on the top and left are computed as:
 
@@ -85,7 +85,7 @@ same number of pixels on both sides.
 For the `'VALID`' padding, the output height and width are computed as:
 
     out_height = ceil(float(in_height - filter_height + 1) / float(strides[1]))
-    out_width  = ceil(float(in_width - filter_width + 1) / float(stides[2]))
+    out_width  = ceil(float(in_width - filter_width + 1) / float(strides[2]))
 
 and the padding values are always zero. The output is then computed as
 
@@ -106,6 +106,7 @@ concatenated.
 @@conv2d
 @@depthwise_conv2d
 @@separable_conv2d
+@@conv2d_transpose
 
 ## Pooling
 
@@ -150,6 +151,7 @@ TensorFlow provides several operations that help you perform classification.
 @@sigmoid_cross_entropy_with_logits
 @@softmax
 @@softmax_cross_entropy_with_logits
+@@sparse_softmax_cross_entropy_with_logits
 
 ## Embeddings
 
@@ -244,7 +246,12 @@ def sigmoid_cross_entropy_with_logits(logits, targets, name=None):
 
   For brevity, let `x = logits`, `z = targets`.  The logistic loss is
 
-      x - x * z + log(1 + exp(-x))
+        z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
+      = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
+      = (1 - z) * x + log(1 + exp(-x))
+      = x - x * z + log(1 + exp(-x))
 
   To ensure stability and avoid overflow, the implementation uses
 
@@ -530,7 +537,11 @@ def moments(x, axes, name=None):
     #                                        divisor), axes,
     #                    name="variance")
     mean = math_ops.mul(math_ops.reduce_sum(x, axes), divisor, name="mean")
-    var = math_ops.mul(math_ops.reduce_sum(math_ops.square(x - mean), axes),
+    # Give x-mean a specific name, so the caller might take advantage of it.
+    # The caller should have a fallback plan, however: this tensor may not be
+    # available if this function implementation changes.
+    x_centered = math_ops.sub(x, mean, name="x_centered")
+    var = math_ops.mul(math_ops.reduce_sum(math_ops.square(x_centered), axes),
                        divisor, name="variance")
     return mean, var
 
@@ -686,7 +697,8 @@ def _compute_sampled_logits(weights, biases, inputs, labels, num_sampled,
       if sampled_logits.dtype != acc_weights.dtype:
         acc_weights = math_ops.cast(acc_weights, sampled_logits.dtype)
       sampled_logits += sparse_ops.sparse_to_dense(
-          sparse_indices, sampled_logits_shape, acc_weights, 0.0)
+          sparse_indices, sampled_logits_shape, acc_weights,
+          default_value=0.0, validate_indices=False)
 
     if subtract_log_q:
       # Subtract log of Q(l), prior probability that l appears in sampled.

@@ -17,8 +17,9 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/platform/port.h"
-#include "tensorflow/core/public/tensor.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -99,14 +100,14 @@ class ScatterUpdateOp : public OpKernel {
     OP_REQUIRES(
         c, TensorShapeUtils::IsVectorOrHigher(Tparams.shape()),
         errors::InvalidArgument("params must be at least 1-D, got shape ",
-                                Tparams.shape().ShortDebugString()));
+                                Tparams.shape().DebugString()));
     OP_REQUIRES(
         c, ValidShapes(Tparams, Tupdates, Tindices),
         errors::InvalidArgument(
             "Must have updates.shape = indices.shape + params.shape[1:], got ",
-            "updates.shape ", Tupdates.shape().ShortDebugString(),
-            ", indices.shape ", Tindices.shape().ShortDebugString(),
-            ", params.shape ", Tparams.shape().ShortDebugString()));
+            "updates.shape ", Tupdates.shape().DebugString(),
+            ", indices.shape ", Tindices.shape().DebugString(),
+            ", params.shape ", Tparams.shape().DebugString()));
     const Index N = Tindices.NumElements();
 
     // We always return the input ref.
@@ -147,10 +148,8 @@ class ScatterUpdateOp : public OpKernel {
 #define REGISTER_SCATTER_UPDATE_INT32(type) REGISTER_SCATTER_UPDATE(type, int32)
 #define REGISTER_SCATTER_UPDATE_INT64(type) REGISTER_SCATTER_UPDATE(type, int64)
 
-TF_CALL_NUMBER_TYPES(REGISTER_SCATTER_UPDATE_INT32);
-TF_CALL_NUMBER_TYPES(REGISTER_SCATTER_UPDATE_INT64);
-REGISTER_SCATTER_UPDATE_INT32(bool)
-REGISTER_SCATTER_UPDATE_INT64(bool)
+TF_CALL_ALL_TYPES(REGISTER_SCATTER_UPDATE_INT32);
+TF_CALL_ALL_TYPES(REGISTER_SCATTER_UPDATE_INT64);
 
 #undef REGISTER_SCATTER_UPDATE_INT64
 #undef REGISTER_SCATTER_UPDATE_INT32

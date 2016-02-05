@@ -3,12 +3,14 @@
 # Return the options to use for a C++ library or binary build.
 # Uses the ":optmode" config_setting to pick the options.
 
-load("/tensorflow/core/platform/default/build_config_root",
+load("//tensorflow/core:platform/default/build_config_root.bzl",
      "tf_cuda_tests_tags")
 
 # List of proto files for android builds
 def tf_android_core_proto_sources():
     return [
+        "//tensorflow/core:example/example.proto",
+        "//tensorflow/core:example/feature.proto",
         "//tensorflow/core:framework/allocation_description.proto",
         "//tensorflow/core:framework/attr_value.proto",
         "//tensorflow/core:framework/config.proto",
@@ -24,6 +26,7 @@ def tf_android_core_proto_sources():
         "//tensorflow/core:framework/tensor_shape.proto",
         "//tensorflow/core:framework/tensor_slice.proto",
         "//tensorflow/core:framework/types.proto",
+        "//tensorflow/core:framework/versions.proto",
         "//tensorflow/core:lib/core/error_codes.proto",
         "//tensorflow/core:util/saved_tensor_slice.proto"
 	]
@@ -37,7 +40,10 @@ def if_cuda(a, b=[]):
 
 
 def tf_copts():
-  return ["-pthread", "-fno-exceptions", "-DEIGEN_AVOID_STL_ARRAY",] + if_cuda(["-DGOOGLE_CUDA=1"])
+  return (["-fno-exceptions", "-DEIGEN_AVOID_STL_ARRAY",] +
+          if_cuda(["-DGOOGLE_CUDA=1"]) +
+          select({"//tensorflow:darwin": [],
+                  "//conditions:default": ["-pthread"]}))
 
 
 # Given a list of "op_lib_names" (a list of files in the ops directory
@@ -282,6 +288,28 @@ _py_wrap_cc = rule(attrs={
                        "py_out": "%{py_module_name}.py",
                    },
                    implementation=_py_wrap_cc_impl,)
+
+
+# Bazel rule for collecting the header files that a target depends on.
+def _transitive_hdrs_impl(ctx):
+  outputs = set()
+  for dep in ctx.attr.deps:
+    outputs += dep.cc.transitive_headers
+  return struct(files=outputs)
+
+
+_transitive_hdrs = rule(attrs={
+    "deps": attr.label_list(allow_files=True,
+                            providers=["cc"]),
+},
+                        implementation=_transitive_hdrs_impl,)
+
+
+def transitive_hdrs(name, deps=[], **kwargs):
+  _transitive_hdrs(name=name + "_gather",
+                   deps=deps)
+  native.filegroup(name=name,
+                   srcs=[":" + name + "_gather"])
 
 def tf_extension_linkopts():
   return []  # No extension link opts

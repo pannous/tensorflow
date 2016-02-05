@@ -28,6 +28,10 @@ from tensorflow.python.framework import test_ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.framework import versions
 from tensorflow.python.ops import common_shapes
+from tensorflow.python.ops import constant_op
+# Import gradients to register _IndexedSlicesToTensor.
+import tensorflow.python.ops.gradients  # pylint: disable=unused-import
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import variables
 from tensorflow.python.platform import googletest
 
@@ -50,6 +54,34 @@ class SparseTensorTest(test_util.TensorFlowTestCase):
     self.assertEqual(sp.indices.dtype, dtypes.int64)
     self.assertEqual(sp.values.dtype, dtypes.string)
     self.assertEqual(sp.shape.dtype, dtypes.int64)
+
+
+class IndexedSlicesTest(test_util.TensorFlowTestCase):
+
+  def testToTensor(self):
+    with self.test_session():
+      values = constant_op.constant([2, 3, 5, 7], shape=[2, 2])
+      indices = constant_op.constant([0, 2])
+      dense_shape = constant_op.constant([3, 2])
+      x = ops.IndexedSlices(values, indices, dense_shape)
+      tensor = ops.convert_to_tensor(x, name="tensor")
+      self.assertAllEqual(tensor.eval(), [[2, 3], [0, 0], [5, 7]])
+
+  def testNegation(self):
+    with self.test_session():
+      values = constant_op.constant([2, 3, 5, 7], shape=[2, 2])
+      indices = constant_op.constant([0, 2])
+      x = -ops.IndexedSlices(values, indices)
+      self.assertAllEqual(x.values.eval(), [[-2, -3], [-5, -7]])
+      self.assertAllEqual(x.indices.eval(), [0, 2])
+
+  def testScalarMul(self):
+    with self.test_session():
+      values = constant_op.constant([2, 3, 5, 7], shape=[2, 2])
+      indices = constant_op.constant([0, 2])
+      x = math_ops.scalar_mul(-2, ops.IndexedSlices(values, indices))
+      self.assertAllEqual(x.values.eval(), [[-4, -6], [-10, -14]])
+      self.assertAllEqual(x.indices.eval(), [0, 2])
 
 
 class NodeDefConstructorTest(test_util.TensorFlowTestCase):
@@ -956,13 +988,58 @@ class GraphDefVersionTest(test_util.TensorFlowTestCase):
 
   def testGraphDefVersion(self):
     """Test that the graphdef version is plumbed through to kernels."""
-    for version in range(versions.GRAPH_DEF_VERSION_MIN,
-                         versions.GRAPH_DEF_VERSION_MAX + 1):
+    for version in range(versions.GRAPH_DEF_VERSION_MIN_PRODUCER,
+                         versions.GRAPH_DEF_VERSION + 2):
       with ops.Graph().as_default() as g:
-        g.graph_def_version = version
+        g.graph_def_versions.producer = version
         with self.test_session(graph=g):
           v = test_ops.graph_def_version().eval()
           self.assertEqual(version, v)
+
+
+# NOTE(petewarden): Dummy stats registrations for ops used in the tests.
+@ops.RegisterStatistics("a", "weight_parameters")
+def _calc_a_weight_params(unused_graph, unused_node):
+  return ops.OpStats("weight_parameters", 10)
+
+
+@ops.RegisterStatistics("a", "flops")
+def _calc_a_forward_flops(unused_graph, unused_node):
+  return ops.OpStats("flops", 20)
+
+
+class StatisticsTest(test_util.TensorFlowTestCase):
+
+  def testRegisteredNode(self):
+    graph = ops.Graph()
+    node = ops._NodeDef("a", "an_a")
+    weight_params = ops.get_stats_for_node_def(graph, node, "weight_parameters")
+    self.assertEqual(10, weight_params.value)
+    flops = ops.get_stats_for_node_def(graph, node, "flops")
+    self.assertEqual(20, flops.value)
+    missing_stat = ops.get_stats_for_node_def(graph, node, "missing_stat")
+    self.assertEqual(None, missing_stat.value)
+
+  def testUnregisteredNode(self):
+    graph = ops.Graph()
+    node = ops._NodeDef("b", "a_b")
+    weight_params = ops.get_stats_for_node_def(graph, node, "weight_params")
+    self.assertEqual(None, weight_params.value)
+
+  def testAccumulateStatistics(self):
+    weight_params_total = ops.OpStats("weight_parameters")
+    self.assertEqual(None, weight_params_total.value)
+    flops_total = ops.OpStats("flops")
+    self.assertEqual(None, flops_total.value)
+    first_weight_params = ops.OpStats("weight_parameters", 100)
+    weight_params_total += first_weight_params
+    self.assertEqual(100, weight_params_total.value)
+    second_flops = ops.OpStats("flops", 3)
+    flops_total += second_flops
+    self.assertEqual(3, flops_total.value)
+    second_weight_params = ops.OpStats("weight_parameters", 200)
+    weight_params_total += second_weight_params
+    self.assertEqual(300, weight_params_total.value)
 
 
 if __name__ == "__main__":

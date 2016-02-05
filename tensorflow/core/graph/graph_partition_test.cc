@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <unordered_map>
 
-#include <gtest/gtest.h>
 #include "tensorflow/cc/ops/array_ops.h"
 #include "tensorflow/cc/ops/const_op.h"
 #include "tensorflow/cc/ops/control_flow_ops.h"
@@ -32,6 +31,7 @@ limitations under the License.
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/protobuf.h"
+#include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/public/version.h"
 
 namespace tensorflow {
@@ -75,16 +75,19 @@ void Partition(const GraphDef& graph_def,
   CHECK(s.ok()) << s;
 
   // Check versions
-  EXPECT_EQ(graph_def.version(), TF_GRAPH_DEF_VERSION);
+  EXPECT_EQ(graph_def.versions().producer(), TF_GRAPH_DEF_VERSION);
+  EXPECT_EQ(graph_def.versions().min_consumer(),
+            TF_GRAPH_DEF_VERSION_MIN_CONSUMER);
   for (auto& it : *partitions) {
-    EXPECT_EQ(graph_def.version(), it.second.version());
+    EXPECT_EQ(graph_def.versions().producer(), it.second.versions().producer());
+    EXPECT_EQ(graph_def.versions().min_consumer(),
+              it.second.versions().min_consumer());
   }
 }
 
 void CheckLoopConstruction(const GraphDef& graph_def) {
   std::unordered_map<string, GraphDef> partitions;
   Partition(graph_def, &partitions);
-  GraphConstructorOptions opts;
   for (const auto& kv : partitions) {
     const GraphDef& gdef = kv.second;
     bool has_control_enter = false;
@@ -332,6 +335,29 @@ TEST_F(GraphPartitionTest, CrossDeviceLoop) {
   NextIteration(b1, in_.opts().WithName("A5"));
 
   CheckLoopConstruction(ToGraphDef());
+}
+
+TEST_F(GraphPartitionTest, CrossDeviceLoop1) {
+  using namespace ::tensorflow::ops;  // NOLINT(build/namespaces)
+  Node* a1 = BoolInput(in_.opts().WithName("A1"));
+  Node* a2 = Enter(a1, "foo", in_.opts().WithName("B2"));
+  Node* a3 = Merge({a2, {"B5", 0, DT_BOOL}}, in_.opts().WithName("A3"));
+  LoopCond(a3, in_.opts().WithName("A4"));
+  Node* b1 = Identity(a3, in_.opts().WithName("B1"));
+  NextIteration(b1, in_.opts().WithName("B5"));
+
+  std::unordered_map<string, GraphDef> partitions;
+  Partition(ToGraphDef(), &partitions);
+  for (const auto& kv : partitions) {
+    const GraphDef& gdef = kv.second;
+    for (const NodeDef& ndef : gdef.node()) {
+      if (ndef.name() == "A3") {
+        // A3, B2, and B5 are on the same device.
+        EXPECT_EQ(ndef.input(0), "B2");
+        EXPECT_EQ(ndef.input(1), "B5");
+      }
+    }
+  }
 }
 
 }  // namespace

@@ -558,13 +558,12 @@ For example:
 
 ```prettyprint
 # 't' is [[1, 1], [2, 2]]
-# 'paddings' is [[1, 1]], [2, 2]]
+# 'paddings' is [[1, 1], [2, 2]]
 # rank of 't' is 2
-pad(t, paddings) ==> [[0, 0, 0, 0, 0]
-                      [0, 0, 0, 0, 0]
-                      [0, 1, 1, 0, 0]
-                     [[0, 2, 2, 0, 0]
-                      [0, 0, 0, 0, 0]]
+pad(t, paddings) ==> [[0, 0, 0, 0, 0, 0]
+                      [0, 0, 1, 1, 0, 0]
+                      [0, 0, 2, 2, 0, 0]
+                      [0, 0, 0, 0, 0, 0]]
 ```
 
 ##### Args:
@@ -728,6 +727,7 @@ output[3, 2:, :, ...] = input[3, 2:, :, ...]
 ```
 
 In contrast, if:
+
 ```prettyprint
 # Given this:
 batch_dim = 2
@@ -753,7 +753,7 @@ output[2:, :, 3, :, ...] = input[2:, :, 3, :, ...]
 
 *  <b>`input`</b>: A `Tensor`. The input to reverse.
 *  <b>`seq_lengths`</b>: A `Tensor` of type `int64`.
-    1-D with length `input.dims(0)` and
+    1-D with length `input.dims(batch_dim)` and
     `max(seq_lengths) < input.dims(seq_dim)`
 *  <b>`seq_dim`</b>: An `int`. The dimension which is partially reversed.
 *  <b>`batch_dim`</b>: An optional `int`. Defaults to `0`.
@@ -884,7 +884,7 @@ tf.transpose(b, perm=[0, 2, 1]) ==> [[[1  4]
 
 - - -
 
-### `tf.gather(params, indices, name=None)` {#gather}
+### `tf.gather(params, indices, validate_indices=None, name=None)` {#gather}
 
 Gather slices from `params` according to `indices`.
 
@@ -912,6 +912,7 @@ this operation will permute `params` accordingly.
 
 *  <b>`params`</b>: A `Tensor`.
 *  <b>`indices`</b>: A `Tensor`. Must be one of the following types: `int32`, `int64`.
+*  <b>`validate_indices`</b>: An optional `bool`. Defaults to `True`.
 *  <b>`name`</b>: A name for the operation (optional).
 
 ##### Returns:
@@ -1026,5 +1027,65 @@ For example:
 ##### Returns:
 
   A `Tensor`. Has the same type as `data`.
+
+
+
+## Other Functions and Classes
+- - -
+
+### `tf.shape_n(input, name=None)` {#shape_n}
+
+Returns shape of tensors.
+
+This operation returns N 1-D integer tensors representing shape of `input[i]s`.
+
+##### Args:
+
+
+*  <b>`input`</b>: A list of at least 1 `Tensor` objects of the same type.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A list with the same number of `Tensor` objects as `input` of `Tensor` objects of type `int32`.
+
+
+- - -
+
+### `tf.unique_with_counts(x, name=None)` {#unique_with_counts}
+
+Finds unique elements in a 1-D tensor.
+
+This operation returns a tensor `y` containing all of the unique elements of `x`
+sorted in the same order that they occur in `x`. This operation also returns a
+tensor `idx` the same size as `x` that contains the index of each value of `x`
+in the unique output `y`. Finally, it returns a third tensor `count` that
+contains the count of each element of `y` in `x`. In other words:
+
+`y[idx[i]] = x[i] for i in [0, 1,...,rank(x) - 1]`
+
+For example:
+
+```prettyprint
+# tensor 'x' is [1, 1, 2, 4, 4, 4, 7, 8, 8]
+y, idx, count = unique(x)
+y ==> [1, 2, 4, 7, 8]
+idx ==> [0, 0, 1, 2, 2, 2, 3, 4, 4]
+count ==> [2, 1, 3, 1, 2]
+```
+
+##### Args:
+
+
+*  <b>`x`</b>: A `Tensor`. 1-D.
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A tuple of `Tensor` objects (y, idx, count).
+
+*  <b>`y`</b>: A `Tensor`. Has the same type as `x`. 1-D.
+*  <b>`idx`</b>: A `Tensor` of type `int32`. 1-D.
+*  <b>`count`</b>: A `Tensor` of type `int32`. 1-D.
 
 
